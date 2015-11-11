@@ -3,7 +3,6 @@ import os
 import unittest
 
 from os_code_profiler.decorators.nova import \
-    GreenletProfiler, \
     NovaServiceProfilingException, \
     Service, \
     _ServiceDecorator, \
@@ -43,12 +42,12 @@ class TestNovaServiceDumper(unittest.TestCase):
         return FakeConfig({
             'clock_type': clock_type,
             'interval': interval,
-            'clear_each_interval': True,
+            'clear_each_interval': clear_each_interval,
             'results_dir': results_dir
         })
 
     @mock.patch(
-        'os_code_profiler.decorators.nova.GreenletProfiler.is_running',
+        'os_code_profiler.decorators.nova.profiler.is_running',
         return_value=True
     )
     def test_profiling_already_enabled(self, mocked):
@@ -61,7 +60,37 @@ class TestNovaServiceDumper(unittest.TestCase):
         with self.assertRaises(NovaServiceProfilingException):
             dumper.work()
 
-    @mock.patch('os_code_profiler.decorators.nova.GreenletProfiler.set_clock_type')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.start')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.stop')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.clear_stats')
+    def test_dump_with_clear(self, mocked_clear, mocked_stop, mocked_start):
+        """
+        Tests that dump stops, clears, then restarts the profiler
+
+        """
+        config = self.create_config(clear_each_interval=True)
+        dumper = _Dumper(config)
+        dumper._dump()
+        mocked_stop.assert_called_with()
+        mocked_clear.assert_called_with()
+        mocked_start.assert_called_with()
+
+    @mock.patch('os_code_profiler.decorators.nova.profiler.start')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.stop')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.clear_stats')
+    def test_dump_no_clear(self, mocked_clear, mocked_stop, mocked_start):
+        """
+        Tests that the profiler is not stopped, cleared, then restarted
+
+        """
+        config = self.create_config(clear_each_interval=False)
+        dumper = _Dumper(config)
+        dumper._dump()
+        mocked_stop.assert_not_called()
+        mocked_clear.assert_not_called()
+        mocked_start.assert_not_called()
+
+    @mock.patch('os_code_profiler.decorators.nova.profiler.set_clock_type')
     def test_set_clock_type(self, mocked):
         """
         Tests setting of the clock type.
