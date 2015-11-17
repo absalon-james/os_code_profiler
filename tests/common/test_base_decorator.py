@@ -117,3 +117,19 @@ class TestBaseDecorator(unittest.TestCase):
         config = {}
         with self.assertRaises(DecorateNotImplemented):
             dec(o, config)
+
+    def test_redecorate(self):
+        """
+        Should not be able to redecorate an object
+
+        """
+
+        def fake_decorate(obj, config):
+            return obj
+        dec = BaseDecorator('__mumbo_jumbo__')
+        o = FakeObject()
+        dec._decorate = mock.Mock(side_effect=fake_decorate)
+        config = {}
+        dec(o, config)
+        dec(o, config)
+        self.assertEquals(dec._decorate.call_count, 1)

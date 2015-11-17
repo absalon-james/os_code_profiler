@@ -1,8 +1,14 @@
 import GreenletProfiler as profiler
 import time
 
+from eventlet import sleep
+
 from os_code_profiler.common.decorators import Base as BaseDecorator
-from os_code_profiler.common.profiling import Config as ProfilingConfig
+from os_code_profiler.common.profiling import \
+    Config as ProfilingConfig,\
+    Context as ProfilingContext
+from os_code_profiler.common import utils
+
 
 class NovaServiceProfilingException(Exception):
     """
@@ -21,14 +27,21 @@ class _Dumper():
     from a nova service threadgroup.
 
     """
-    def __init__(self, config):
+    def __init__(self, service, config, outputs):
         """
+        @param service - Service object
         @param config - ProfilingConfig object
+        @param outputs - List of output objects
 
         """
         self._config = config
         self._stop = False
         self._sub_interval = 1
+        self._outputs = outputs
+
+        self._started = None
+        self._ended = None
+        self._topic = getattr(service, 'topic', 'nova-unknown')
 
     def should_stop(self):
         """
@@ -52,14 +65,22 @@ class _Dumper():
         # If clearing each interval, stop profiler
         if self._config.clear_each_interval:
             profiler.stop()
+            self._ended = utils.utc_seconds()
 
         # Dump the stats
-        #@TODO - Actual dump
+        stats = profiler.get_func_stats()
+        ctx = ProfilingContext(
+            started=self._started, ended=utils.utc_seconds(),
+            topic=self._topic
+        )
+        for o in self._outputs:
+            o.write(ctx, stats)
 
         # If clearing each interval, clear stats and restart profiler
         if self._config.clear_each_interval:
             profiler.clear_stats()
             profiler.start()
+            self.started = utils.utc_seconds()
 
     def work(self):
         """
@@ -74,12 +95,13 @@ class _Dumper():
 
         # Start profiler
         profiler.start()
+        self._started = utils.utc_seconds()
 
         last_dumped = time.time()
 
         while not self.should_stop():
             # Sleep for less than whole interval for faster interrupts
-            eventlet.sleep(self._sub_interval)
+            sleep(self._sub_interval)
             checked = time.time()
             # Only take action if we have exceeded the interval period
             if (checked - last_dumped) > self._config.interval:
@@ -88,6 +110,7 @@ class _Dumper():
 
         # Finally stop the profiler
         profiler.stop()
+        self._ended = utils.utc_seconds()
 
 
 class _ServiceDecorator(BaseDecorator):
@@ -100,7 +123,49 @@ class _ServiceDecorator(BaseDecorator):
         super(_ServiceDecorator, self).__init__('__nova_service_decorator__')
 
     def _decorate(self, module, config):
-        config_obj = ProfilingConfig(config)
+        """
+        Looks for the service class and alters the __init__ method
+        to additionaly spawn a green thread on the threadgroup
+        that will report code profiling statistics.
+
+        @param module - Module to decorate
+            (should be nova.openstack.common.service)
+        @param config - Dictionary to configure the decoration.
+
+        """
+        klass = getattr(module, 'Service', None)
+        if klass is None:
+            return module
+
+        old_init = getattr(klass, '__init__', None)
+        if old_init is None:
+            return module
+
+        # Replace init method with new one
+        def new_init(init_self, *args, **kwargs):
+            """
+            Replacement for __init__.
+            Calls the original __init__ and then spawns a thread
+            on the thread group.
+
+            """
+            # Call the old init method
+            old_init(init_self, *args, **kwargs)
+
+            # Create a profile config from config
+            profile_config = ProfilingConfig(config)
+
+            # Create output instances
+            # TODO - Load outputs
+            outputs = []
+
+            # Create the dumper
+            dumper = _Dumper(init_self, profile_config, outputs)
+
+            # Use the service's threadsgroup to add a thread
+            init_self.tg.add_thread(dumper.work)
+
+        setattr(klass, '__init__', new_init)
         return module
 
 Service = _ServiceDecorator()

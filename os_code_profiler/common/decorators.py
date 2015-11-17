@@ -5,6 +5,7 @@ class DecorateNotImplemented(Exception):
     """
     pass
 
+
 class Base(object):
     """
     Includes many convenience methods common to most decorators.
