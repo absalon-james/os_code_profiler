@@ -6,7 +6,7 @@ long_description = (
 )
 
 setup(
-    name="os_code_profiling",
+    name="os_code_profiler",
     version="0.0.0",
     author="james absalon",
     author_email="james.absalon@rackspace.com",
