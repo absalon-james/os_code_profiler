@@ -74,7 +74,11 @@ class _Dumper():
             topic=self._topic
         )
         for o in self._outputs:
-            o.write(ctx, stats)
+            try:
+                o.write(ctx, stats)
+            except Exception:
+                # @TODO - Possibly do something with logging
+                pass
 
         # If clearing each interval, clear stats and restart profiler
         if self._config.clear_each_interval:
@@ -156,8 +160,10 @@ class _ServiceDecorator(BaseDecorator):
             profile_config = ProfilingConfig(config)
 
             # Create output instances
-            # TODO - Load outputs
+            loader = utils.PluginLoader()
             outputs = []
+            for p_name, p_config in config.get('outputs', {}).iteritems():
+                outputs.append(loader.load(p_name, config=p_config))
 
             # Create the dumper
             dumper = _Dumper(init_self, profile_config, outputs)

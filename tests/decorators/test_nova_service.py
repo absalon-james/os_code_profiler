@@ -159,6 +159,31 @@ class TestNovaServiceDumper(unittest.TestCase):
         dumper = _Dumper(object(), config, outputs)
         self.assertEquals(dumper._outputs, outputs)
 
+    @mock.patch('os_code_profiler.decorators.nova.profiler.start')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.stop')
+    @mock.patch('os_code_profiler.decorators.nova.profiler.clear_stats')
+    def test_outputs_exception(self, *mocked):
+        """
+        Execution should continue even if output encounters
+        exception during write.
+
+        """
+        config = self.create_config()
+        class BadOutput(object):
+            def write(self, ctx, stats):
+                raise Exception("Stuff happened yo")
+
+        class GoodOutput(object):
+            def write(Self, ctx, stats):
+                pass
+
+        outputs = [BadOutput(), GoodOutput()]
+        outputs[1].write = mock.Mock()
+
+        dumper = _Dumper(object(), config, outputs)
+        dumper._dump()
+        self.assertEquals(outputs[1].write.call_count, 1)
+
     @mock.patch(
         'os_code_profiler.decorators.nova.profiler.get_func_stats',
         return_value=5
@@ -234,3 +259,33 @@ class TestNovaService(unittest.TestCase):
         module = Service(module, config_dict)
         s = module.Service()
         self.assertEquals(s.tg.thread_counter, 1)
+
+    @mock.patch('os_code_profiler.common.utils.PluginLoader.load')
+    def test_load_outputs(self, mocked):
+        """
+        Tests that outputs are loaded according to config
+
+        """
+        class FakeModule():
+            class Service(object):
+                def __init__(self, threads=1000):
+                    self.tg = FakeThreadGroup()
+
+        plugin_config_dict = {
+            'a': 1,
+            'b': 2
+        }
+
+        plugin_name = 'some_package.some_module.some_class'
+
+        output_config_dict = {
+            'outputs': {
+               plugin_name: plugin_config_dict
+            }
+        }
+
+        module = FakeModule()
+        module = Service(module, output_config_dict)
+        s = module.Service()
+        mocked.assert_called_with(plugin_name, config=plugin_config_dict)
+
