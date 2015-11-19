@@ -32,7 +32,6 @@ class Config():
         self.interval = int(config_dict.get("interval", 60 * 5))
         self.clear_each_interval = \
             bool(config_dict.get('clear_each_interval', True))
-        self.results_dir = config_dict.get("results_dir", "/tmp")
 
 
 class Context():

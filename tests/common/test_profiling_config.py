@@ -20,7 +20,6 @@ class TestProfilingConfig(unittest.TestCase):
         self.assertEquals(config_obj.clock_type, 'wall')
         self.assertEquals(config_obj.interval, 60 * 5)
         self.assertEquals(config_obj.clear_each_interval, True)
-        self.assertEquals(config_obj.results_dir, '/tmp')
 
     def test_clock_type(self):
         """
@@ -75,12 +74,3 @@ class TestProfilingConfig(unittest.TestCase):
         config_dict = {"clear_each_interval": 0}
         config_obj = ProfilingConfig(config_dict)
         self.assertTrue(config_obj.clear_each_interval is False)
-
-    def test_results_dir(self):
-        """
-        Tests the results dir
-
-        """
-        config_dict = {"results_dir": "/blah"}
-        config_obj = ProfilingConfig(config_dict)
-        self.assertEquals(config_obj.results_dir, "/blah")
