@@ -109,6 +109,7 @@ class _Dumper():
             checked = time.time()
             # Only take action if we have exceeded the interval period
             if (checked - last_dumped) > self._config.interval:
+                self._dump()
                 # Update last dumped
                 last_dumped = checked
 
